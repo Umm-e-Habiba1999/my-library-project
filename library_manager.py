@@ -1,137 +1,107 @@
+# library_manager.py
+import streamlit as st
 import json
 import os
 
-# File to store library data
-FILE_NAME = 'library.txt'
+# Load library from file if exists
+LIBRARY_FILE = "library.txt"
+library = []
 
-# Load library from file
 def load_library():
-    if os.path.exists(FILE_NAME):
-        with open(FILE_NAME, 'r') as file:
-            try:
-                return json.load(file)
-            except json.JSONDecodeError:
-                return []
+    if os.path.exists(LIBRARY_FILE):
+        with open(LIBRARY_FILE, "r") as f:
+            return json.load(f)
     return []
 
-# Save library to file
-def save_library(library):
-    with open(FILE_NAME, 'w') as file:
-        json.dump(library, file, indent=4)
+def save_library():
+    with open(LIBRARY_FILE, "w") as f:
+        json.dump(library, f)
 
-# Display menu
-def display_menu():
-    print("\nWelcome to your Personal Library Manager!")
-    print("1. Add a book")
-    print("2. Remove a book")
-    print("3. Search for a book")
-    print("4. Display all books")
-    print("5. Display statistics")
-    print("6. Exit")
-
-# Add a book
-def add_book(library):
-    title = input("Enter the book title: ").strip()
-    author = input("Enter the author: ").strip()
-    try:
-        year = int(input("Enter the publication year: "))
-    except ValueError:
-        print("Invalid year. Try again.")
-        return
-    genre = input("Enter the genre: ").strip()
-    read_input = input("Have you read this book? (yes/no): ").strip().lower()
-    read = True if read_input == 'yes' else False
-
+def add_book(title, author, year, genre, read):
     book = {
-        'title': title,
-        'author': author,
-        'year': year,
-        'genre': genre,
-        'read': read
+        "title": title,
+        "author": author,
+        "year": year,
+        "genre": genre,
+        "read": read
     }
     library.append(book)
-    print("Book added successfully!")
 
-# Remove a book
-def remove_book(library):
-    title = input("Enter the title of the book to remove: ").strip().lower()
-    found = False
-    for book in library:
-        if book['title'].lower() == title:
-            library.remove(book)
-            found = True
-            print("Book removed successfully!")
-            break
-    if not found:
-        print("Book not found.")
+def remove_book(title):
+    global library
+    library = [book for book in library if book["title"].lower() != title.lower()]
 
-# Search for a book
-def search_book(library):
-    print("Search by:")
-    print("1. Title")
-    print("2. Author")
-    choice = input("Enter your choice: ").strip()
-    keyword = input("Enter the title/author: ").strip().lower()
-    matches = []
-
-    for book in library:
-        if (choice == '1' and keyword in book['title'].lower()) or \
-           (choice == '2' and keyword in book['author'].lower()):
-            matches.append(book)
-
-    if matches:
-        print("Matching Books:")
-        for i, book in enumerate(matches, start=1):
-            status = "Read" if book['read'] else "Unread"
-            print(f"{i}. {book['title']} by {book['author']} ({book['year']}) - {book['genre']} - {status}")
+def search_books(search_type, query):
+    query = query.lower()
+    if search_type == "Title":
+        return [book for book in library if query in book["title"].lower()]
     else:
-        print("No matching books found.")
+        return [book for book in library if query in book["author"].lower()]
 
-# Display all books
-def display_books(library):
-    if not library:
-        print("Your library is empty.")
-        return
-    print("Your Library:")
-    for i, book in enumerate(library, start=1):
-        status = "Read" if book['read'] else "Unread"
-        print(f"{i}. {book['title']} by {book['author']} ({book['year']}) - {book['genre']} - {status}")
-
-# Display statistics
-def display_stats(library):
+def display_statistics():
     total = len(library)
-    if total == 0:
-        print("No books in library.")
-        return
-    read_count = sum(1 for book in library if book['read'])
-    percent = (read_count / total) * 100
-    print(f"Total books: {total}")
-    print(f"Percentage read: {percent:.1f}%")
+    read_count = len([book for book in library if book["read"]])
+    percent = (read_count / total * 100) if total else 0
+    return total, percent
 
-# Main loop
-def main():
-    library = load_library()
+# Load existing library
+library = load_library()
 
-    while True:
-        display_menu()
-        choice = input("Enter your choice: ").strip()
+# Streamlit UI
+st.title("📚 Personal Library Manager")
 
-        if choice == '1':
-            add_book(library)
-        elif choice == '2':
-            remove_book(library)
-        elif choice == '3':
-            search_book(library)
-        elif choice == '4':
-            display_books(library)
-        elif choice == '5':
-            display_stats(library)
-        elif choice == '6':
-            save_library(library)
-            print("Library saved to file. Goodbye!")
-            break
+menu = ["Add a Book", "Remove a Book", "Search for a Book", "Display All Books", "Display Statistics"]
+choice = st.sidebar.selectbox("Menu", menu)
+
+if choice == "Add a Book":
+    st.subheader("➕ Add a Book")
+    title = st.text_input("Enter book title:")
+    author = st.text_input("Enter author name:")
+    year = st.number_input("Enter publication year:", min_value=0, step=1)
+    genre = st.text_input("Enter genre:")
+    read = st.radio("Have you read this book?", ("Yes", "No"))
+    if st.button("Add Book"):
+        add_book(title, author, int(year), genre, True if read == "Yes" else False)
+        st.success("Book added successfully!")
+        save_library()
+
+elif choice == "Remove a Book":
+    st.subheader("❌ Remove a Book")
+    title = st.text_input("Enter the title of the book to remove:")
+    if st.button("Remove Book"):
+        remove_book(title)
+        st.success("Book removed successfully!")
+        save_library()
+
+elif choice == "Search for a Book":
+    st.subheader("🔍 Search for a Book")
+    search_type = st.radio("Search by:", ["Title", "Author"])
+    query = st.text_input(f"Enter {search_type.lower()}:")
+    if query:
+        results = search_books(search_type, query)
+        if results:
+            st.write("### Matching Books:")
+            for i, book in enumerate(results, 1):
+                status = "Read" if book["read"] else "Unread"
+                st.write(f"{i}. {book['title']} by {book['author']} ({book['year']}) - {book['genre']} - {status}")
         else:
-            print("Invalid choice. Please try again.")
+            st.warning("No matching books found.")
 
-if __name__ == "__main__":
-    main()
+elif choice == "Display All Books":
+    st.subheader("📖 Your Library")
+    if library:
+        for i, book in enumerate(library, 1):
+            status = "Read" if book["read"] else "Unread"
+            st.write(f"{i}. {book['title']} by {book['author']} ({book['year']}) - {book['genre']} - {status}")
+    else:
+        st.info("No books in the library.")
+
+elif choice == "Display Statistics":
+    st.subheader("📊 Library Statistics")
+    total, percent = display_statistics()
+    st.write(f"**Total books:** {total}")
+    st.write(f"**Percentage read:** {percent:.2f}%")
+
+   
+       
+       
